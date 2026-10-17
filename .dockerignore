@@ -1,0 +1,13 @@
+node_modules
+.tools
+.git
+.env
+data
+dist
+build-server
+artifacts
+test-results
+playwright-report
+*.py
+*.zip
+*.log

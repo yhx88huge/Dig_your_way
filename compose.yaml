@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: digout
+      POSTGRES_USER: digout
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-digout-local-only}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U digout -d digout"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 20s
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+  app:
+    build: .
+    ports:
+      # 中国大陆 ECS 上 80/443 需要域名 ICP 备案，默认用 8080；可设 WEB_PORT 覆盖。
+      # 绑定 0.0.0.0 供公网访问，同时需在安全组放行该端口。
+      - "${WEB_PORT:-8080}:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgresql://digout:${POSTGRES_PASSWORD:-digout-local-only}@db:5432/digout
+      # 反向代理到域名时填真实站点地址，多个用逗号分隔；留空则按访问地址的 Host 自动匹配。
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      TURN_SECONDS: ${TURN_SECONDS:-90}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+    restart: unless-stopped
+volumes:
+  pgdata:
